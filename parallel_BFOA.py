@@ -6,117 +6,93 @@ import numpy
 import copy
 from fastaReader import fastaReader
 
-if __name__ == "__main__":
-    numeroDeBacterias = 4
-    numRandomBacteria = 1
-    iteraciones = 30
-    tumbo = 2                                             #numero de gaps a insertar 
-    nado = 3
-    secuencias = list()
-    
+def run_bfoa(
+    numeroDeBacterias=5,
+    numRandomBacteria=2,
+    iteraciones=5,
+    tumbo=2,
+    nado=3,
+    dAttr=0.1,
+    wAttr=0.002,
+    hRep=0.1,
+    wRep=0.001,
+    max_processes=4
+):
+    """
+    Ejecuta el algoritmo parallel BFOA y devuelve:
+      - veryBestFitness: mejor fitness obtenido
+      - globalNFE: total de evaluaciones de función objetivo
+      - veryBestBlosum: puntuación BLOSUM del mejor individuo
+
+    Parámetros no activos:
+      - numRandomBacteria: número de bacterias iniciales aleatorias (no implementado internamente)
+      - nado: longitud de "nado" tras cada tumble (no implementado internamente)
+    """
+    # Cargar secuencias
     secuencias = fastaReader().seqs
-    names = fastaReader().names
-    
-        
-    
-  
-         
-    
-    
-    #hace todas las secuencias listas de caracteres
     for i in range(len(secuencias)):
-        #elimina saltos de linea
         secuencias[i] = list(secuencias[i])
-        
 
-    
-
-    globalNFE = 0                            #numero de evaluaciones de la funcion objetivo
-    
-    
-
-    dAttr= 0.1 #0.1
-    wAttr= 0.002 #0.2
-    hRep=dAttr
-    wRep= .001    #10
-    
-   
-
-  
-    
+    # Inicializaciones
+    globalNFE = 0
     manager = Manager()
     numSec = len(secuencias)
-    print("numSec: ", numSec)
-    
     poblacion = manager.list(range(numeroDeBacterias))
-    names = manager.list(names)
-    NFE = manager.list(range(numeroDeBacterias))
-    
-    
-    # print(secuencias)
 
-
-
-    def poblacionInicial():    #lineal
-        #crece la poblacion al numero de bacterias
+    # Población inicial: copia directa de las secuencias
+    def poblacionInicial():
         for i in range(numeroDeBacterias):
             bacterium = []
             for j in range(numSec):
                 bacterium.append(secuencias[j])
             poblacion[i] = list(bacterium)
-           
-   
 
+    operadorBacterial = bacteria(numeroDeBacterias, max_processes=max_processes)
+    veryBestIdx = None
+    veryBestFitness = None
+    veryBestBlosum = None
 
-
-
-    def printPoblacion():
-        for i in range(numeroDeBacterias):
-            print(poblacion[i])
-            
-    
-
-    #---------------------------------------------------------------------------------------------------------
-    operadorBacterial = bacteria(numeroDeBacterias)    
-    veryBest = [None, None, None] #indice, fitness, secuencias
-    
-    #registra el tiempo de inicio
     start_time = time.time()
-    
-    print("poblacion inicial ...")
-    poblacionInicial() 
-    
+    poblacionInicial()
+
+    # Evolución
     for it in range(iteraciones):
-        print("poblacion inicial creada - Tumbo ...")
+        # fase tumble
         operadorBacterial.tumbo(numSec, poblacion, tumbo)
-        print("Tumbo Realizado - Cuadrando ...")
+        # (no hay fase de nado implementada)
         operadorBacterial.cuadra(numSec, poblacion)
-        print("poblacion inicial cuadrada - Creando granLista de Pares...")
         operadorBacterial.creaGranListaPares(poblacion)
-        print("granList: creada - Evaluando Blosum Parallel")
-        operadorBacterial.evaluaBlosum()  #paralelo
-        print("blosum evaluado - creando Tablas Atract Parallel...")
-
-        operadorBacterial.creaTablasAtractRepel(poblacion, dAttr, wAttr,hRep, wRep)
-
-
+        operadorBacterial.evaluaBlosum()
+        operadorBacterial.creaTablasAtractRepel(poblacion, dAttr, wAttr, hRep, wRep)
         operadorBacterial.creaTablaInteraction()
-        print("tabla Interaction creada - creando tabla Fitness")
         operadorBacterial.creaTablaFitness()
-        print("tabla Fitness creada ")
+
         globalNFE += operadorBacterial.getNFE()
         bestIdx, bestFitness = operadorBacterial.obtieneBest(globalNFE)
-        if (veryBest[0] == None) or (bestFitness > veryBest[1]): #Remplaza el mejor 
-            veryBest[0] = bestIdx
-            veryBest[1] = bestFitness
-            veryBest[2] = copy.deepcopy(poblacion[bestIdx])
-        operadorBacterial.replaceWorst(poblacion, veryBest[0])
+        currentBlosum = operadorBacterial.blosumScore[bestIdx]
+
+        # Actualizar global best
+        if veryBestFitness is None or bestFitness > veryBestFitness:
+            veryBestIdx = bestIdx
+            veryBestFitness = bestFitness
+            veryBestBlosum = currentBlosum
+
+        operadorBacterial.replaceWorst(poblacion, veryBestIdx)
         operadorBacterial.resetListas(numeroDeBacterias)
 
-    print("Very Best: ", veryBest)
-    #imprime el tiempo de ejecucion
-    print("--- %s seconds ---" % (time.time() - start_time))
+    # Retornar métricas
+    return veryBestFitness, globalNFE, veryBestBlosum
 
-
-
-    
+if __name__ == "__main__":
+    # Ejemplo de uso: 3 iteraciones internas, 1 bacteria aleatoria (no activa)
+    fitness, interacciones, blosum = run_bfoa(
+        numeroDeBacterias=4,
+        numRandomBacteria=1,
+        iteraciones=3,
+        tumbo=2,
+        nado=3,
+        max_processes=2
+    )
+    print(f"\nVery Best Fitness: {fitness}")
+    print(f"Interacciones: {interacciones}")
+    print(f"BLOSUM: {blosum}")
