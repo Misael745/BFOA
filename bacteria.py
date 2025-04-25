@@ -70,18 +70,48 @@ class bacteria():
                 return False
         return True
 
+
     def tumbo(self, numSec, poblacion, numGaps):
-        for i in range(len(poblacion)):
-            bacterTmp = poblacion[i]
-            bacterTmp = list(bacterTmp)
-            for j in range(numGaps):
-                seqnum = random.randint(0, len(bacterTmp)-1)
-                pos = random.randint(0, len(bacterTmp[seqnum]))
-                part1 = bacterTmp[seqnum][:pos]
-                part2 = bacterTmp[seqnum][pos:]
-                temp = part1 + ["-"] + part2
-                bacterTmp[seqnum] = temp
+            moves = [None] * len(poblacion)
+
+            for i in range(len(poblacion)):
+                # copia la solución actual
+                bacterTmp = list(poblacion[i])
+
+                # aplicamos numGaps tumbles, pero solo registramos el primero
+                move_recorded = False
+                for _ in range(numGaps):
+                    # escoge aleatoriamente una de las secuencias y una posición
+                    seqnum = random.randint(0, numSec - 1)
+                    pos = random.randint(0, len(bacterTmp[seqnum]))
+
+                    # inserta el gap
+                    part1 = bacterTmp[seqnum][:pos]
+                    part2 = bacterTmp[seqnum][pos:]
+                    bacterTmp[seqnum] = part1 + ["-"] + part2
+
+                    # si es la primera inserción para este individuo, la guardamos
+                    if not move_recorded:
+                        moves[i] = (seqnum, pos)
+                        move_recorded = True
+
+                # actualiza la población con la nueva solución
                 poblacion[i] = tuple(bacterTmp)
+
+            return moves
+
+    def tumbo_apply_moves(self, numSec, poblacion, moves):
+            """
+            Reaplica en cada individuo el mismo gap registrado en moves.
+            """
+            for i, move in enumerate(moves):
+                seqnum, pos = move
+                bacterTmp = list(poblacion[i])
+                part1, part2 = bacterTmp[seqnum][:pos], bacterTmp[seqnum][pos:]
+                bacterTmp[seqnum] = part1 + ["-"] + part2
+                poblacion[i] = tuple(bacterTmp)
+
+
 
     def creaGranListaPares(self, poblacion):
         for i in range(len(poblacion)):

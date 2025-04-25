@@ -26,7 +26,6 @@ def run_bfoa(
 
     Parámetros no activos:
       - numRandomBacteria: número de bacterias iniciales aleatorias (no implementado internamente)
-      - nado: longitud de "nado" tras cada tumble (no implementado internamente)
     """
     # Cargar secuencias
     secuencias = fastaReader().seqs
@@ -57,9 +56,10 @@ def run_bfoa(
 
     # Evolución
     for it in range(iteraciones):
-        # fase tumble
-        operadorBacterial.tumbo(numSec, poblacion, tumbo)
-        # (no hay fase de nado implementada)
+        # 1) Tumble + registro de movimientos
+        moves = operadorBacterial.tumbo(numSec, poblacion, tumbo)
+
+        # 2) Evaluación tras tumble
         operadorBacterial.cuadra(numSec, poblacion)
         operadorBacterial.creaGranListaPares(poblacion)
         operadorBacterial.evaluaBlosum()
@@ -67,15 +67,38 @@ def run_bfoa(
         operadorBacterial.creaTablaInteraction()
         operadorBacterial.creaTablaFitness()
 
+        # Acumular NFE tras evaluación
         globalNFE += operadorBacterial.getNFE()
-        bestIdx, bestFitness = operadorBacterial.obtieneBest(globalNFE)
-        currentBlosum = operadorBacterial.blosumScore[bestIdx]
 
-        # Actualizar global best
-        if veryBestFitness is None or bestFitness > veryBestFitness:
-            veryBestIdx = bestIdx
-            veryBestFitness = bestFitness
-            veryBestBlosum = currentBlosum
+        best_local = operadorBacterial.obtieneBest(globalNFE)[1]
+
+        # 3) Swim: reaplicar moves hasta nado pasos mientras mejore
+        pasos_swim = nado
+        while pasos_swim > 0:
+            operadorBacterial.tumbo_apply_moves(numSec, poblacion, moves)
+            operadorBacterial.cuadra(numSec, poblacion)
+            operadorBacterial.creaGranListaPares(poblacion)
+            operadorBacterial.evaluaBlosum()
+            operadorBacterial.creaTablasAtractRepel(poblacion, dAttr, wAttr, hRep, wRep)
+            operadorBacterial.creaTablaInteraction()
+            operadorBacterial.creaTablaFitness()
+
+            # Acumular NFE de swim
+            globalNFE += operadorBacterial.getNFE()
+
+            nuevo_best = operadorBacterial.obtieneBest(globalNFE)[1]
+
+            if nuevo_best > best_local:
+                best_local = nuevo_best
+                pasos_swim -= 1
+            else:
+                break
+
+        # 4) Actualizar global best y reemplazar peor
+        if veryBestFitness is None or best_local > veryBestFitness:
+            veryBestFitness = best_local
+            veryBestIdx     = operadorBacterial.obtieneBest(globalNFE)[0]
+            veryBestBlosum  = operadorBacterial.blosumScore[veryBestIdx]
 
         operadorBacterial.replaceWorst(poblacion, veryBestIdx)
         operadorBacterial.resetListas(numeroDeBacterias)
@@ -83,8 +106,9 @@ def run_bfoa(
     # Retornar métricas
     return veryBestFitness, globalNFE, veryBestBlosum
 
+
 if __name__ == "__main__":
-    # Ejemplo de uso: 3 iteraciones internas, 1 bacteria aleatoria (no activa)
+    # Ejemplo de uso: 3 iteraciones internas y swim de 3 pasos
     fitness, interacciones, blosum = run_bfoa(
         numeroDeBacterias=4,
         numRandomBacteria=1,
